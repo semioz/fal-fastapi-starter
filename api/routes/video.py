@@ -69,10 +69,10 @@ async def generate_video_from_text(
 
 @router.post("/generate-video-from-image")
 async def generate_video_from_image(
-    data: ImageToVideoRequest = Form(),
+    request: ImageToVideoRequest = Form(),
 ):
     try:
-        contents = await data.image.read()
+        contents = await request.image.read()
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
             temp_file.write(contents)
@@ -85,10 +85,10 @@ async def generate_video_from_image(
         arguments = {
             k: v
             for k, v in {
-                "prompt": data.prompt,
+                "prompt": request.prompt,
                 "image_url": image_url,
-                "duration": data.duration,
-                "prompt_optimizer": data.prompt_optimizer,
+                "duration": request.duration,
+                "prompt_optimizer": request.prompt_optimizer,
             }.items()
             if v is not None
         }
@@ -96,7 +96,7 @@ async def generate_video_from_image(
         print(f"Fal AI image-to-video arguments: {arguments}")
 
         handler = await fal_client.submit_async(
-            "fal-ai/kling-video/v2.1/master/image-to-video",
+            request.model,
             arguments=arguments,
         )
         output = await handler.get()

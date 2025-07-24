@@ -38,11 +38,12 @@ class GenerateImageRequest(BaseModel):
     seed: int | None = Field(
         None, description="Random seed for reproducible generation"
     )
-    model_name: str | None = Field("fal-ai/imagen4/preview")
+    model: str | None = Field("fal-ai/imagen4/preview")
 
 
 class ImageToVideoRequest(BaseModel):
     prompt: str
+    model: str | None = Field("fal-ai/kling-video/v2.1/master/image-to-video")
     image: Annotated[UploadFile, File()]
     duration: str | None = Field("5", description="5 or 10 seconds")
     prompt_optimizer: bool | None = Field(
