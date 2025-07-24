@@ -18,11 +18,6 @@ async def restore_image(
     try:
         contents = await data.image.read()
 
-        if len(contents) > 20 * 1024 * 1024:
-            raise HTTPException(
-                status_code=400, detail="Image too large. Maximum size is 20MB."
-            )
-
         if not is_valid_image(data.image):
             raise HTTPException(
                 status_code=400,
