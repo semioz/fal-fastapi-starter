@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 class TextToVideoRequest(BaseModel):
     prompt: str
-    model: str | None = Field("fal-ai/minimax/hailuo-02/standard/text-to-video")
+    model: str = Field("fal-ai/minimax/hailuo-02/standard/text-to-video")
     aspect_ratio: str | None = Field(
         "16:9", description="Aspect ratio of the video (16:9, 9:16, 1:1)"
     )
@@ -38,12 +38,12 @@ class GenerateImageRequest(BaseModel):
     seed: int | None = Field(
         None, description="Random seed for reproducible generation"
     )
-    model: str | None = Field("fal-ai/imagen4/preview")
+    model: str = Field("fal-ai/imagen4/preview")
 
 
 class ImageToVideoRequest(BaseModel):
     prompt: str
-    model: str | None = Field("fal-ai/kling-video/v2.1/master/image-to-video")
+    model: str = Field("fal-ai/kling-video/v2.1/master/image-to-video")
     image: Annotated[UploadFile, File()]
     duration: str | None = Field("5", description="5 or 10 seconds")
     prompt_optimizer: bool | None = Field(
@@ -53,6 +53,7 @@ class ImageToVideoRequest(BaseModel):
 
 class RestoreImageRequest(BaseModel):
     image: Annotated[UploadFile, File()]
+    model: str = Field("fal-ai/image-editing/photo-restoration")
     guidance_scale: float | None = Field(
         3.5, description="CFG scale - how closely to follow the restoration guidance"
     )

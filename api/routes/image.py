@@ -13,12 +13,12 @@ router = APIRouter()
 
 @router.post("/restore-image")
 async def restore_image(
-    data: RestoreImageRequest = Form(),
+    request: RestoreImageRequest = Form(),
 ):
     try:
-        contents = await data.image.read()
+        contents = await request.image.read()
 
-        if not is_valid_image(data.image):
+        if not is_valid_image(request.image):
             raise HTTPException(
                 status_code=400,
                 detail="Invalid file format. Only JPEG, PNG, and JPG are allowed.",
@@ -39,13 +39,13 @@ async def restore_image(
                 k: v
                 for k, v in {
                     "image_url": uploaded_url,
-                    "guidance_scale": data.guidance_scale,
-                    "num_inference_steps": data.num_inference_steps,
-                    "safety_tolerance": data.safety_tolerance,
-                    "output_format": data.output_format,
-                    "aspect_ratio": data.aspect_ratio,
-                    "seed": data.seed,
-                    "sync_mode": data.sync_mode,
+                    "guidance_scale": request.guidance_scale,
+                    "num_inference_steps": request.num_inference_steps,
+                    "safety_tolerance": request.safety_tolerance,
+                    "output_format": request.output_format,
+                    "aspect_ratio": request.aspect_ratio,
+                    "seed": request.seed,
+                    "sync_mode": request.sync_mode,
                 }.items()
                 if v is not None
             }
@@ -53,7 +53,7 @@ async def restore_image(
             print(f"Fal AI restoration arguments: {arguments}")
 
             handler = await fal_client.submit_async(
-                "fal-ai/image-editing/photo-restoration",
+                request.model,
                 arguments=arguments,
             )
 
