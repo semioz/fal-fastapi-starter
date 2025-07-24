@@ -1,13 +1,15 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
-from fastapi.responses import JSONResponse
-from typing import Optional
-import fal_client
-import tempfile
 import os
+import tempfile
 
-from core.schemas import TextToVideoRequest
+import fal_client
+from fastapi import APIRouter, Form, HTTPException
+from fastapi.responses import JSONResponse
+
+from core.schemas import ImageToVideoRequest, TextToVideoRequest
+from core.utils import handle_fal_error
 
 router = APIRouter()
+
 
 @router.post("/generate-video-from-text")
 async def generate_video_from_text(
@@ -15,19 +17,22 @@ async def generate_video_from_text(
 ):
     try:
         print(f"Generating video with prompt: {request.prompt}")
-        print(f"Parameters: aspect_ratio={request.aspect_ratio}, duration={request.duration}, resolution={request.resolution}")
+        print(f"Using model: {request.model}")
 
         arguments = {
-            k: v for k, v in {
+            k: v
+            for k, v in {
+                "model": request.model,
                 "prompt": request.prompt,
-                "aspect_ratio": request.aspect_ratio if request.aspect_ratio != "16:9" else None,
-                "duration": request.duration if request.duration != "8s" else None,
+                "aspect_ratio": request.aspect_ratio,
+                "duration": request.duration,
                 "negative_prompt": request.negative_prompt,
-                "enhance_prompt": request.enhance_prompt if request.enhance_prompt != True else None,
+                "enhance_prompt": request.enhance_prompt,
                 "seed": request.seed,
-                "resolution": request.resolution if request.resolution != "720p" else None,
-                "generate_audio": request.generate_audio if request.generate_audio != True else None,
-            }.items() if v is not None
+                "resolution": request.resolution,
+                "generate_audio": request.generate_audio,
+            }.items()
+            if v is not None
         }
 
         print(f"Fal AI video arguments: {arguments}")
@@ -39,104 +44,80 @@ async def generate_video_from_text(
         output = await handler.get()
 
         print(f"Raw output from Fal (type={type(output)}): {repr(output)}")
-        
-        video_url = None
 
-        if isinstance(output, dict):
-            if "video" in output and isinstance(output["video"], dict):
-                if "url" in output["video"]:
-                    video_url = output["video"]["url"]
-                    print(f"Found video URL in nested structure: {video_url}")
+        video_url = None
+        video_data = output.get("video")
+        if isinstance(video_data, dict):
+            video_url = video_data.get("url")
+            if video_url:
+                print(f"Found video URL: {video_url}")
 
         if not video_url:
             raise HTTPException(
                 status_code=500,
-                detail="No video URL found in response from the video generation service",
+                detail="No video URL found in response from the FAL API!",
             )
 
-        print(f"Successfully generated video URL: {video_url}")
         return JSONResponse(content={"video_url": video_url})
 
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Video generation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Video generation error: {str(e)}")
+        raise handle_fal_error(e)
 
 
 @router.post("/generate-video-from-image")
 async def generate_video_from_image(
-    image: UploadFile = File(...),
-    prompt: Optional[str] = Form(None),
+    data: ImageToVideoRequest = Form(),
 ):
     try:
-        contents = await image.read()
+        contents = await data.image.read()
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
             temp_file.write(contents)
             temp_file_path = temp_file.name
 
-        try:
-            print(f"Uploading image to Fal: {temp_file_path}")
-            image_url = fal_client.upload_file(temp_file_path)
-            print(f"Uploaded image URL: {image_url}")
+        print(f"Uploading image to Fal: {temp_file_path}")
+        image_url = fal_client.upload_file(temp_file_path)
+        print(f"Uploaded image URL: {image_url}")
 
-            handler = await fal_client.submit_async(
-                "fal-ai/kling-video/v2.1/master/image-to-video",
-                arguments={
-                    "prompt": prompt,
-                    "image_url": image_url,
-                },
-            )
-            output = await handler.get()
+        arguments = {
+            k: v
+            for k, v in {
+                "prompt": data.prompt,
+                "image_url": image_url,
+                "duration": data.duration,
+                "prompt_optimizer": data.prompt_optimizer,
+            }.items()
+            if v is not None
+        }
 
-            print(f"Raw output from Fal (type={type(output)}): {repr(output)}")
-            print(
-                f"Output keys: {list(output.keys()) if isinstance(output, dict) else 'Not a dict'}"
-            )
+        print(f"Fal AI image-to-video arguments: {arguments}")
 
-            video_url = None
+        handler = await fal_client.submit_async(
+            "fal-ai/kling-video/v2.1/master/image-to-video",
+            arguments=arguments,
+        )
+        output = await handler.get()
 
-            if isinstance(output, dict):
-                if "video" in output and isinstance(output["video"], dict):
-                    if "url" in output["video"]:
-                        video_url = output["video"]["url"]
-                        print(f"Found video URL in nested structure: {video_url}")
+        print(f"Raw output from Fal (type={type(output)}): {repr(output)}")
 
-            if not video_url:
-                raise HTTPException(status_code=500, detail="No video URL in response")
+        video_url = None
+        if "video" in output and isinstance(output["video"], dict):
+            video_url = output["video"]["url"]
 
-            print(f"Successfully extracted video URL: {video_url}")
-            return JSONResponse(content={"video_url": video_url})
+        if not video_url:
+            raise HTTPException(status_code=500, detail="No video URL in response")
 
-        except Exception as fal_error:
-            print(f"Fal API error: {fal_error}")
+        print(f"Successfully extracted video URL: {video_url}")
+        return JSONResponse(content={"video_url": video_url})
 
-            error_str = str(fal_error)
-
-            if (
-                "image_too_small" in error_str
-                or "Image dimensions are too small" in error_str
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Image is too small for video generation. Please upload an image that is at least 300x300 pixels.",
-                )
-            elif "image_too_large" in error_str:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Image is too large. Please upload a smaller image.",
-                )
-            elif "unsupported_format" in error_str or "invalid_image" in error_str:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Unsupported image format. Please upload a JPEG, PNG, or WebP image.",
-                )
-            else:
-                raise fal_error
-
-        finally:
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
-
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Image to video generation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Image to video generation error: {str(e)}")
+        raise handle_fal_error(e)
+    finally:
+        if os.path.exists(temp_file_path):
+            os.unlink(temp_file_path)

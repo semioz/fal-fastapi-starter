@@ -1,17 +1,14 @@
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 
+from api.routes.health import router as health_router
 from api.routes.image import router as image_router
 from api.routes.video import router as video_router
-from api.routes.health import router as health_router
 
 load_dotenv()
 
-app = FastAPI(
-    title="Fal FastAPI Starter",
-    version="1.0.0"
-)
+app = FastAPI(title="Fal FastAPI Starter", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,

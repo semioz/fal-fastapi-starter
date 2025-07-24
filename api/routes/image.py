@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Form
-from fastapi.responses import FileResponse, JSONResponse
-import fal_client
 import os
 import tempfile
 
-from core.utils import is_valid_image, parse_fal_output
+import fal_client
+from fastapi import APIRouter, Form, HTTPException
+from fastapi.responses import FileResponse, JSONResponse
+
 from core.schemas import GenerateImageRequest, RestoreImageRequest
+from core.utils import is_valid_image, parse_fal_output
 
 router = APIRouter()
 
@@ -40,7 +41,8 @@ async def restore_image(
             print(f"Uploaded file to Fal storage: {uploaded_url}")
 
             arguments = {
-                k: v for k, v in {
+                k: v
+                for k, v in {
                     "image_url": uploaded_url,
                     "guidance_scale": data.guidance_scale,
                     "num_inference_steps": data.num_inference_steps,
@@ -49,7 +51,8 @@ async def restore_image(
                     "aspect_ratio": data.aspect_ratio,
                     "seed": data.seed,
                     "sync_mode": data.sync_mode,
-                }.items() if v is not None
+                }.items()
+                if v is not None
             }
 
             print(f"Fal AI restoration arguments: {arguments}")
@@ -67,7 +70,7 @@ async def restore_image(
             if result is None:
                 raise HTTPException(
                     status_code=500,
-                    detail="No image URL found in response from the restoration service",
+                    detail="No image URL found in response from the FAL API!",
                 )
 
             return {"restored_image_url": result}
@@ -81,7 +84,7 @@ async def restore_image(
                     arguments={"image_url": uploaded_url},
                 )
                 output = await handler.get()
-                
+
                 result = parse_fal_output(output)
                 if result:
                     return {"restored_image_url": result}
@@ -117,16 +120,22 @@ async def generate_image(
 ):
     try:
         print(f"Generating image with prompt: {data.prompt}")
-        print(f"Parameters: aspect_ratio={data.aspect_ratio}, num_images={data.num_images}, seed={data.seed}")
-        
+        print(f"Model selected: {data.model_name}")
+
         arguments = {
-            k: v for k, v in {
+            k: v
+            for k, v in {
                 "prompt": data.prompt,
-                "negative_prompt": data.negative_prompt if data.negative_prompt else None,
-                "aspect_ratio": data.aspect_ratio if data.aspect_ratio != "1:1" else None,
+                "negative_prompt": data.negative_prompt
+                if data.negative_prompt
+                else None,
+                "aspect_ratio": data.aspect_ratio
+                if data.aspect_ratio != "1:1"
+                else None,
                 "num_images": data.num_images if data.num_images != 1 else None,
                 "seed": data.seed,
-            }.items() if v is not None
+            }.items()
+            if v is not None
         }
 
         print(f"Fal AI arguments: {arguments}")
@@ -144,16 +153,13 @@ async def generate_image(
         if result is None:
             raise HTTPException(
                 status_code=500,
-                detail="No image URL found in response from the image generation service",
+                detail="No image URL found in response from the FAL API!",
             )
 
         if result.startswith("http"):
             return JSONResponse(content={"image_url": result})
-        else:
-            print(f"Serving temp file from: {result}")
-            return FileResponse(
-                result, media_type="image/jpeg", filename="generated.jpg"
-            )
+        print(f"Serving temp file from: {result}")
+        return FileResponse(result, media_type="image/jpeg", filename="generated.jpg")
 
     except Exception as e:
         print(f"Error in image generation: {e}")
